@@ -5,11 +5,10 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/your-username/ngcli/filesystem"
-	"github.com/your-username/ngcli/utils"
+	"github.com/vourteen14/ngcli/filesystem"
+	"github.com/vourteen14/ngcli/utils"
 )
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize ngcli with default templates and configuration",
