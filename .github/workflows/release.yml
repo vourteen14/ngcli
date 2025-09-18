@@ -36,7 +36,16 @@ jobs:
         OUTPUT_NAME=ngcli-linux-${{ matrix.goarch }}
         tar -czf ${OUTPUT_NAME}.tar.gz ${OUTPUT_NAME}
 
+    - name: Generate checksums
+      run: |
+        OUTPUT_NAME=ngcli-linux-${{ matrix.goarch }}
+        sha256sum ${OUTPUT_NAME}.tar.gz > ${OUTPUT_NAME}.tar.gz.sha256
+        md5sum ${OUTPUT_NAME}.tar.gz > ${OUTPUT_NAME}.tar.gz.md5
+
     - name: Upload release asset
       uses: softprops/action-gh-release@v1
       with:
-        files: ./ngcli-linux-${{ matrix.goarch }}.tar.gz
+        files: |
+          ./ngcli-linux-${{ matrix.goarch }}.tar.gz
+          ./ngcli-linux-${{ matrix.goarch }}.tar.gz.sha256
+          ./ngcli-linux-${{ matrix.goarch }}.tar.gz.md5
