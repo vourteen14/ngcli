@@ -109,6 +109,12 @@ func listConfigurations() error {
 	enabledDir, hasEnabled := utils.DetectNginxEnabledPath()
 	
 	for _, config := range configs {
+		// Strip .conf extension for display consistency
+		displayName := config
+		if len(config) > 5 && config[len(config)-5:] == ".conf" {
+			displayName = config[:len(config)-5]
+		}
+
 		status := "disabled"
 		if hasEnabled {
 			enabledPath := filepath.Join(enabledDir, config)
@@ -118,7 +124,7 @@ func listConfigurations() error {
 		} else {
 			status = "n/a"
 		}
-		tableData = append(tableData, []string{config, status})
+		tableData = append(tableData, []string{displayName, status})
 	}
 	
 	fmt.Printf("Nginx configurations (%s):\n", configDir)
