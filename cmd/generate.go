@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vourteen14/ngcli/filesystem"
+	"github.com/vourteen14/ngcli/system"
 	"github.com/vourteen14/ngcli/template"
 	"github.com/vourteen14/ngcli/utils"
 )
@@ -14,7 +15,6 @@ import (
 var (
 	setFlags     []string
 	dryRun       bool
-	force        bool
 	output       string
 	templateName string
 	interactive  bool
@@ -26,12 +26,17 @@ var generateCmd = &cobra.Command{
 	Long: `Generate nginx configuration file from a template with specified parameters.
 
 The config_name will be used as the output filename (config_name.conf).
-Use --template flag to specify which template to use, or run without it to see available templates.
+After generation, the configuration will be automatically validated (nginx -t),
+enabled (symlink created), and nginx will be reloaded.
+
+If a file already exists, you will be prompted to confirm overwrite.
+Use --dry-run to preview the configuration without writing files.
 
 Examples:
   ngcli generate mysite --template prod --set domain=example.com
   ngcli generate api-server --template custom-api --set domain=api.example.com
-  ngcli generate blog                    # Shows available templates to choose from`,
+  ngcli generate blog                    # Shows available templates to choose from
+  ngcli generate test --dry-run          # Preview configuration without writing`,
 	Args: cobra.ExactArgs(1),
 	RunE: runGenerate,
 }
@@ -41,7 +46,6 @@ func init() {
 
 	generateCmd.Flags().StringArrayVar(&setFlags, "set", []string{}, "set template parameters (key=value)")
 	generateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview output without writing files")
-	generateCmd.Flags().BoolVar(&force, "force", false, "overwrite existing files without confirmation")
 	generateCmd.Flags().StringVarP(&output, "output", "o", "", "override output file path")
 	generateCmd.Flags().StringVarP(&templateName, "template", "t", "", "template to use (if not specified, shows available templates)")
 	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "interactive mode for parameter input")
@@ -149,7 +153,23 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to determine output path: %w", err)
 	}
 
-	if !force && utils.FileExists(outputPath) {
+	// Check if file exists and prompt for overwrite
+	if utils.FileExists(outputPath) {
+		fmt.Printf("Configuration file already exists: %s\n", outputPath)
+		fmt.Print("Overwrite existing file? (y/N): ")
+		var response string
+		if _, err := fmt.Scanln(&response); err != nil {
+			// Treat scan error or empty input as "no"
+			fmt.Println("Operation cancelled")
+			return nil
+		}
+
+		if response != "y" && response != "Y" && response != "yes" {
+			fmt.Println("Operation cancelled")
+			return nil
+		}
+
+		// Create backup before overwriting
 		if err := filesystem.BackupFile(outputPath); err != nil {
 			return fmt.Errorf("failed to create backup: %w", err)
 		}
@@ -158,7 +178,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := filesystem.WriteFile(outputPath, content, force); err != nil {
+	// Write configuration file
+	if err := filesystem.WriteFile(outputPath, content, true); err != nil {
 		return fmt.Errorf("failed to write configuration: %w", err)
 	}
 
@@ -166,6 +187,61 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if tmpl.Metadata != nil && tmpl.Metadata.Description != "" {
 		fmt.Printf("Template: %s - %s\n", templateName, tmpl.Metadata.Description)
 	}
+
+	// Run nginx -t validation
+	if verbose {
+		fmt.Println("Running nginx -t validation...")
+	}
+
+	if err := system.NginxTest(); err != nil {
+		fmt.Printf("\nError: nginx -t validation failed: %v\n", err)
+		fmt.Println("Configuration file generated but NOT enabled (syntax errors detected)")
+		fmt.Println("Please fix the configuration manually and run 'ngcli enable' when ready")
+		return fmt.Errorf("nginx validation failed")
+	}
+
+	if verbose {
+		fmt.Println("nginx -t validation passed")
+	}
+
+	// Auto-enable: Create symlink in sites-enabled (Ubuntu/Debian only)
+	enabledDir, hasEnabled := utils.DetectNginxEnabledPath()
+	if hasEnabled {
+		configFilename := filepath.Base(outputPath)
+		sourcePath := outputPath
+		targetPath := filepath.Join(enabledDir, configFilename)
+
+		if err := filesystem.CreateSymlink(sourcePath, targetPath); err != nil {
+			fmt.Printf("Warning: failed to enable configuration: %v\n", err)
+			fmt.Println("Configuration generated but not enabled")
+			fmt.Printf("Run 'ngcli enable %s' manually to enable it\n", configFilename)
+			return nil
+		}
+
+		fmt.Printf("Enabled configuration: %s\n", configFilename)
+		if verbose {
+			fmt.Printf("Created symlink: %s -> %s\n", targetPath, sourcePath)
+		}
+	} else {
+		if verbose {
+			fmt.Println("sites-enabled directory not found (configuration is active by default on this system)")
+		}
+	}
+
+	// Auto-reload nginx
+	if verbose {
+		fmt.Println("Reloading nginx configuration...")
+	}
+
+	if err := system.NginxReload(); err != nil {
+		fmt.Printf("Warning: failed to reload nginx: %v\n", err)
+		fmt.Println("Configuration generated and enabled but nginx reload failed")
+		fmt.Println("Run 'ngcli reload' manually to apply changes")
+		return nil
+	}
+
+	fmt.Println("Nginx configuration reloaded successfully")
+	fmt.Println("\nConfiguration is now active!")
 
 	return nil
 }
