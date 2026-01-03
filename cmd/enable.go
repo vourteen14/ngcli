@@ -32,12 +32,12 @@ func init() {
 
 func runEnable(cmd *cobra.Command, args []string) error {
 	configName := args[0]
-	
+
 	enabledDir, hasEnabled := utils.DetectNginxEnabledPath()
 	if !hasEnabled {
 		return fmt.Errorf("sites-enabled directory not found (this system may not support enable/disable)")
 	}
-	
+
 	var configDir string
 	if outputDir != "" {
 		configDir = outputDir
@@ -48,19 +48,21 @@ func runEnable(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to detect nginx config directory: %w", err)
 		}
 	}
-	
-	sourcePath := filepath.Join(configDir, configName)
-	targetPath := filepath.Join(enabledDir, configName)
-	
-	if !utils.FileExists(sourcePath) {
-		return fmt.Errorf("configuration file not found: %s", sourcePath)
+
+	sourcePath, err := utils.ResolveConfigPath(configDir, configName)
+	if err != nil {
+		return err
 	}
+
+	// Get the actual filename for symlink
+	configFilename := filepath.Base(sourcePath)
+	targetPath := filepath.Join(enabledDir, configFilename)
 	
 	if err := filesystem.CreateSymlink(sourcePath, targetPath); err != nil {
 		return fmt.Errorf("failed to enable configuration: %w", err)
 	}
 	
-	fmt.Printf("Enabled configuration: %s\n", configName)
+	fmt.Printf("Enabled configuration: %s\n", configFilename)
 	if verbose {
 		fmt.Printf("Created symlink: %s -> %s\n", targetPath, sourcePath)
 	}
