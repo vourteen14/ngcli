@@ -6,10 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vourteen14/ngcli/filesystem"
+	"github.com/vourteen14/ngcli/system"
 	"github.com/vourteen14/ngcli/utils"
 )
 
-var deleteForce bool
+var (
+	deleteForce    bool
+	deleteNoReload bool
+)
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <config_name>",
@@ -24,8 +28,9 @@ Use --force to skip confirmation prompt.`,
 
 func init() {
 	rootCmd.AddCommand(deleteCmd)
-	
+
 	deleteCmd.Flags().BoolVar(&deleteForce, "force", false, "force deletion without confirmation")
+	deleteCmd.Flags().BoolVar(&deleteNoReload, "no-reload", false, "skip automatic nginx reload")
 }
 
 func runDelete(cmd *cobra.Command, args []string) error {
@@ -51,8 +56,12 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if !deleteForce {
 		fmt.Printf("Are you sure you want to delete %s? (y/N): ", configName)
 		var response string
-		fmt.Scanln(&response)
-		
+		if _, err := fmt.Scanln(&response); err != nil {
+			// Treat scan error or empty input as cancellation
+			fmt.Println("Deletion cancelled")
+			return nil
+		}
+
 		if response != "y" && response != "Y" && response != "yes" {
 			fmt.Println("Deletion cancelled")
 			return nil
@@ -73,8 +82,22 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if err := filesystem.DeleteFile(configPath); err != nil {
 		return fmt.Errorf("failed to delete configuration: %w", err)
 	}
-	
+
 	fmt.Printf("Deleted configuration: %s\n", configName)
-	
+
+	if !deleteNoReload {
+		if verbose {
+			fmt.Println("Reloading nginx configuration")
+		}
+
+		if err := system.NginxReload(); err != nil {
+			fmt.Printf("Warning: failed to reload nginx: %v\n", err)
+			fmt.Println("Configuration deleted but nginx reload failed")
+			fmt.Println("Run 'ngcli reload' manually to apply changes")
+		} else {
+			fmt.Println("Nginx configuration reloaded successfully")
+		}
+	}
+
 	return nil
 }
