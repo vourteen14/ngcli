@@ -131,8 +131,11 @@ func runTemplateCreate(cmd *cobra.Command, args []string) error {
 	
 	fmt.Print("Open template in editor now? (Y/n): ")
 	var response string
-	fmt.Scanln(&response)
-	
+	if _, err := fmt.Scanln(&response); err != nil {
+		// Treat scan error or empty input as "yes" (default)
+		response = ""
+	}
+
 	if response == "" || response == "y" || response == "Y" || response == "yes" {
 		editor := detectEditor(editorFlag)
 		
@@ -302,8 +305,12 @@ func runTemplateDelete(cmd *cobra.Command, args []string) error {
 	
 	fmt.Printf("Are you sure you want to delete template '%s'? (y/N): ", templateName)
 	var response string
-	fmt.Scanln(&response)
-	
+	if _, err := fmt.Scanln(&response); err != nil {
+		// Treat scan error or empty input as cancellation
+		fmt.Println("Deletion cancelled")
+		return nil
+	}
+
 	if response != "y" && response != "Y" && response != "yes" {
 		fmt.Println("Deletion cancelled")
 		return nil

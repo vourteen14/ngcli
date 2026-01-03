@@ -86,8 +86,11 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 			
 			fmt.Print("Enter parameters interactively? (Y/n): ")
 			var response string
-			fmt.Scanln(&response)
-			
+			if _, err := fmt.Scanln(&response); err != nil {
+				// Treat scan error or empty input as "yes" (default)
+				response = ""
+			}
+
 			if response == "" || response == "y" || response == "Y" || response == "yes" {
 				interactive = true
 			} else {
@@ -235,10 +238,13 @@ func interactiveParameterInput(tmpl *template.Template, existingParams map[strin
 		prompt += ": "
 
 		fmt.Print(prompt)
-		
+
 		var value string
-		fmt.Scanln(&value)
-		
+		if _, err := fmt.Scanln(&value); err != nil {
+			// Treat scan error or empty input as empty string
+			value = ""
+		}
+
 		if value == "" && param.Default != "" {
 			value = param.Default
 		}
