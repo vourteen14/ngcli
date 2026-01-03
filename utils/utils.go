@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -84,16 +85,34 @@ func EnsureDir(path string) error {
 
 func ValidateRequiredParams(params map[string]string, required []string) error {
 	var missing []string
-	
+
 	for _, param := range required {
 		if _, exists := params[param]; !exists {
 			missing = append(missing, param)
 		}
 	}
-	
+
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required parameters: %s", strings.Join(missing, ", "))
 	}
-	
+
 	return nil
+}
+
+// ResolveConfigPath resolves a config name to its full path.
+// It tries both the exact name and the name with .conf extension.
+func ResolveConfigPath(configDir, configName string) (string, error) {
+	// Try exact name first (for files without .conf extension)
+	exactPath := filepath.Join(configDir, configName)
+	if FileExists(exactPath) {
+		return exactPath, nil
+	}
+
+	// Try with .conf extension
+	confPath := filepath.Join(configDir, configName+".conf")
+	if FileExists(confPath) {
+		return confPath, nil
+	}
+
+	return "", fmt.Errorf("configuration file not found: %s", configName)
 }

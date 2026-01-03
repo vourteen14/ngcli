@@ -32,19 +32,30 @@ func init() {
 
 func runDisable(cmd *cobra.Command, args []string) error {
 	configName := args[0]
-	
+
 	enabledDir, hasEnabled := utils.DetectNginxEnabledPath()
 	if !hasEnabled {
 		return fmt.Errorf("sites-enabled directory not found (this system may not support enable/disable)")
 	}
-	
+
+	// Try to resolve the config name to get the actual filename
+	// First check in sites-enabled directly
 	targetPath := filepath.Join(enabledDir, configName)
+	if !utils.FileExists(targetPath) {
+		// Try with .conf extension
+		targetPath = filepath.Join(enabledDir, configName+".conf")
+		if !utils.FileExists(targetPath) {
+			return fmt.Errorf("configuration not enabled: %s", configName)
+		}
+	}
+
+	configFilename := filepath.Base(targetPath)
 	
 	if err := filesystem.RemoveSymlink(targetPath); err != nil {
 		return fmt.Errorf("failed to disable configuration: %w", err)
 	}
 	
-	fmt.Printf("Disabled configuration: %s\n", configName)
+	fmt.Printf("Disabled configuration: %s\n", configFilename)
 	if verbose {
 		fmt.Printf("Removed symlink: %s\n", targetPath)
 	}

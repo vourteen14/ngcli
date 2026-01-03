@@ -35,7 +35,7 @@ func init() {
 
 func runDelete(cmd *cobra.Command, args []string) error {
 	configName := args[0]
-	
+
 	var configDir string
 	if outputDir != "" {
 		configDir = outputDir
@@ -46,15 +46,17 @@ func runDelete(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to detect nginx config directory: %w", err)
 		}
 	}
-	
-	configPath := filepath.Join(configDir, configName)
-	
-	if !utils.FileExists(configPath) {
-		return fmt.Errorf("configuration file not found: %s", configPath)
+
+	configPath, err := utils.ResolveConfigPath(configDir, configName)
+	if err != nil {
+		return err
 	}
+
+	// Get the actual filename for display and symlink operations
+	configFilename := filepath.Base(configPath)
 	
 	if !deleteForce {
-		fmt.Printf("Are you sure you want to delete %s? (y/N): ", configName)
+		fmt.Printf("Are you sure you want to delete %s? (y/N): ", configFilename)
 		var response string
 		if _, err := fmt.Scanln(&response); err != nil {
 			// Treat scan error or empty input as cancellation
@@ -67,9 +69,9 @@ func runDelete(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	
+
 	if enabledDir, hasEnabled := utils.DetectNginxEnabledPath(); hasEnabled {
-		symlinkPath := filepath.Join(enabledDir, configName)
+		symlinkPath := filepath.Join(enabledDir, configFilename)
 		if utils.FileExists(symlinkPath) {
 			if err := filesystem.RemoveSymlink(symlinkPath); err != nil {
 				fmt.Printf("Warning: failed to remove symlink %s: %v\n", symlinkPath, err)
@@ -83,7 +85,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to delete configuration: %w", err)
 	}
 
-	fmt.Printf("Deleted configuration: %s\n", configName)
+	fmt.Printf("Deleted configuration: %s\n", configFilename)
 
 	if !deleteNoReload {
 		if verbose {

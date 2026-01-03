@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/vourteen14/ngcli/filesystem"
@@ -25,7 +24,7 @@ func init() {
 
 func runShow(cmd *cobra.Command, args []string) error {
 	configName := args[0]
-	
+
 	var configDir string
 	if outputDir != "" {
 		configDir = outputDir
@@ -36,11 +35,10 @@ func runShow(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to detect nginx config directory: %w", err)
 		}
 	}
-	
-	configPath := filepath.Join(configDir, configName)
-	
-	if !utils.FileExists(configPath) {
-		return fmt.Errorf("configuration file not found: %s", configPath)
+
+	configPath, err := utils.ResolveConfigPath(configDir, configName)
+	if err != nil {
+		return err
 	}
 	
 	content, err := filesystem.ReadFile(configPath)
